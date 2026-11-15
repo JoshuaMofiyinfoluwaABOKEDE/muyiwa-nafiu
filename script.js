@@ -283,6 +283,21 @@
       });
     });
     applyFilter("all");
+
+    /* open the article named in the address (#slug), e.g. from the home-page carousel */
+    function openFromHash(){
+      var id = decodeURIComponent((location.hash || "").slice(1));
+      if(!id) return;
+      var target = document.getElementById(id);
+      if(!target || !target.classList.contains("resource-card")) return;
+      var more = target.querySelector("details");
+      if(more) more.open = true;
+      document.querySelectorAll(".resource-card.is-target").forEach(function(c){ c.classList.remove("is-target"); });
+      target.classList.add("is-target");
+      setTimeout(function(){ target.scrollIntoView({block:"start"}); }, 60);
+    }
+    openFromHash();
+    window.addEventListener("hashchange", openFromHash);
   }
 
   /* ---------- gallery lightbox ---------- */
