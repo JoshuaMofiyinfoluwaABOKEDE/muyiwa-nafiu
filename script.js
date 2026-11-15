@@ -5,35 +5,85 @@
   /* ---------- mobile nav ---------- */
   var burger = document.querySelector(".nav-burger");
   var mobileNav = document.querySelector(".mobile-nav");
+  function setMenu(open){
+    if(!burger || !mobileNav) return;
+    mobileNav.classList.toggle("open", open);
+    burger.setAttribute("aria-expanded", open ? "true" : "false");
+    burger.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+    document.documentElement.classList.toggle("menu-open", open);
+  }
   if(burger && mobileNav){
-    burger.addEventListener("click", function(){
-      mobileNav.classList.toggle("open");
-      burger.setAttribute("aria-expanded", mobileNav.classList.contains("open"));
+    burger.addEventListener("click", function(e){
+      e.stopPropagation();
+      setMenu(!mobileNav.classList.contains("open"));
     });
+    mobileNav.addEventListener("click", function(e){ e.stopPropagation(); });
     mobileNav.querySelectorAll("a").forEach(function(a){
-      a.addEventListener("click", function(){ mobileNav.classList.remove("open"); });
+      a.addEventListener("click", function(){ setMenu(false); });
     });
+    document.addEventListener("click", function(){ if(mobileNav.classList.contains("open")) setMenu(false); });
+    window.addEventListener("resize", function(){ if(window.innerWidth > 1080) setMenu(false); });
   }
 
   /* ---------- nav dropdown (Programs) ---------- */
+  function closeDropdowns(except){
+    document.querySelectorAll(".nav-dropdown.open").forEach(function(o){
+      if(o === except) return;
+      o.classList.remove("open");
+      var b = o.querySelector(".nav-dropdown-btn"); if(b) b.setAttribute("aria-expanded", "false");
+    });
+  }
   document.querySelectorAll(".nav-dropdown").forEach(function(dd){
     var btn = dd.querySelector(".nav-dropdown-btn");
     if(!btn) return;
     btn.addEventListener("click", function(e){
       e.stopPropagation();
-      var wasOpen = dd.classList.contains("open");
-      document.querySelectorAll(".nav-dropdown.open").forEach(function(o){ o.classList.remove("open"); });
-      if(!wasOpen){ dd.classList.add("open"); }
+      var open = !dd.classList.contains("open");
+      closeDropdowns(dd);
+      dd.classList.toggle("open", open);
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
     });
+    dd.querySelectorAll(".nav-dropdown-menu a").forEach(function(a){
+      a.addEventListener("click", function(){ closeDropdowns(); dd.classList.add("hover-off"); });
+    });
+    dd.addEventListener("mouseleave", function(){ closeDropdowns(); dd.classList.remove("hover-off"); });
   });
-  document.addEventListener("click", function(){
-    document.querySelectorAll(".nav-dropdown.open").forEach(function(o){ o.classList.remove("open"); });
-  });
+  document.addEventListener("click", function(){ closeDropdowns(); });
   document.addEventListener("keydown", function(e){
     if(e.key === "Escape"){
-      document.querySelectorAll(".nav-dropdown.open").forEach(function(o){ o.classList.remove("open"); });
+      closeDropdowns();
+      if(mobileNav && mobileNav.classList.contains("open")){ setMenu(false); if(burger) burger.focus(); }
     }
   });
+
+  /* ---------- highlight where you are ---------- */
+  (function(){
+    var page = (location.pathname.split("/").pop() || "index.html").replace(/\.html$/, "");
+    function mark(sel){ document.querySelectorAll(sel).forEach(function(a){ a.classList.add("active"); a.setAttribute("aria-current", "page"); }); }
+    if(page === "resources"){ mark('.primary-nav a[href="resources.html"], .mobile-nav a[href="resources.html"]'); return; }
+    if(page === "teenagers-worship-experience"){
+      document.querySelectorAll(".nav-dropdown").forEach(function(d){ d.classList.add("is-current"); });
+      mark('.nav-dropdown-menu a[href="teenagers-worship-experience.html"], .mobile-nav a[href="teenagers-worship-experience.html"]');
+      return;
+    }
+    if(!("IntersectionObserver" in window)) return;
+    var map = { music:"#music", watch:"#music", moments:"#music", book:"#book", programs:"#programs", resources:"resources.html", about:"#about", invite:"#invite" };
+    var links = document.querySelectorAll(".primary-nav > a, .mobile-nav > a:not(.mobile-book)");
+    var progBtn = document.querySelector(".nav-dropdown-btn");
+    var visible = {};
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){ visible[en.target.id] = en.isIntersecting ? en.intersectionRatio : 0; });
+      var best = null, bestR = 0;
+      Object.keys(visible).forEach(function(id){ if(visible[id] > bestR){ bestR = visible[id]; best = id; } });
+      var target = best ? map[best] : null;
+      links.forEach(function(a){
+        var on = target && a.getAttribute("href") === target;
+        a.classList.toggle("active", !!on);
+      });
+      if(progBtn) progBtn.classList.toggle("active", best === "programs");
+    }, { rootMargin:"-80px 0px -45% 0px", threshold:[0, .15, .35, .6] });
+    Object.keys(map).forEach(function(id){ var el = document.getElementById(id); if(el) io.observe(el); });
+  })();
 
   /* ---------- theme toggle ---------- */
   var toggle = document.querySelector(".theme-toggle");
@@ -179,61 +229,134 @@
     };
   }
 
-  /* ---------- invite / booking form ---------- */
+  /* ---------- invite / booking form: builds the invitation and opens WhatsApp ---------- */
   var inviteForm = document.querySelector("#invite-form");
   if(inviteForm){
+    var WA_NUMBER = "2348136785140";
     var out = document.querySelector("#generated-msg");
     var copyBtn = document.querySelector("#copy-msg");
     var copyNote = document.querySelector("#copy-note");
+    var errBox = document.querySelector("#form-error");
+    var $ = function(id){ return inviteForm.querySelector(id); };
+    var venue = $("#inv-venue"), venueLabel = $("#inv-venue-label");
+    var dateIn = $("#inv-date"), endIn = $("#inv-end"), endField = $("#inv-end-field"), multi = $("#inv-multi"), dateLabel = $("#inv-date-label");
+    var REQ = ' <span class="req" aria-hidden="true">*</span>';
 
-    function niceDate(d){
-      if(!d) return "a date to be agreed";
-      var dt = new Date(d + "T00:00:00");
-      if(isNaN(dt.getTime())) return d;
-      return dt.toLocaleDateString(undefined, { year:"numeric", month:"long", day:"numeric" });
+    function radio(name){ var r = inviteForm.querySelector('input[name="' + name + '"]:checked'); return r ? r.value : ""; }
+    function iso(d){ return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
+    function longDate(v){
+      var dt = new Date(v + "T00:00:00");
+      if(isNaN(dt.getTime())) return v;
+      return dt.toLocaleDateString("en-GB", { weekday:"long", day:"numeric", month:"long", year:"numeric" });
+    }
+    function clock(v){
+      if(!v) return "";
+      var p = v.split(":"), h = +p[0], m = p[1];
+      return ((h % 12) || 12) + ":" + m + (h < 12 ? " AM" : " PM");
+    }
+
+    // dates can't be in the past; the last day can't be before the first
+    var today = iso(new Date());
+    dateIn.min = today; endIn.min = today;
+    dateIn.addEventListener("change", function(){
+      endIn.min = dateIn.value || today;
+      if(endIn.value && dateIn.value && endIn.value < dateIn.value) endIn.value = "";
+    });
+
+    multi.addEventListener("change", function(){
+      endField.hidden = !multi.checked;
+      endIn.required = multi.checked;
+      dateLabel.innerHTML = (multi.checked ? "First day" : "Date") + REQ;
+      if(!multi.checked) endIn.value = "";
+    });
+
+    inviteForm.querySelectorAll('input[name="inv-mode"]').forEach(function(r){
+      r.addEventListener("change", function(){
+        var virtual = radio("inv-mode") === "virtual";
+        venueLabel.innerHTML = (virtual ? "Platform and link: where it will stream" : "Venue address: where it will hold") + REQ;
+        venue.placeholder = virtual ? "e.g. Zoom, Google Meet, YouTube or Facebook Live, with the link if you have it" : "Venue name, street, city and state";
+      });
+    });
+
+    inviteForm.addEventListener("input", function(){ errBox.hidden = true; });
+    inviteForm.addEventListener("change", function(){ errBox.hidden = true; });
+
+    function fail(msg, el){
+      errBox.textContent = msg; errBox.hidden = false;
+      if(el){ el.focus(); el.scrollIntoView({ block:"center", behavior:"smooth" }); }
+      return false;
+    }
+    function validate(){
+      errBox.hidden = true;
+      if(!$("#inv-name").value.trim()) return fail("Please add your name.", $("#inv-name"));
+      if(!venue.value.trim()) return fail(radio("inv-mode") === "virtual" ? "Please add the platform it will stream on." : "Please add the venue address where it will hold.", venue);
+      if(!dateIn.value) return fail(multi.checked ? "Please choose the first day." : "Please choose the date.", dateIn);
+      if(multi.checked && !endIn.value) return fail("Please choose the last day of the program.", endIn);
+      if(multi.checked && endIn.value < dateIn.value) return fail("The last day can't be before the first day.", endIn);
+      if(!radio("inv-time")) return fail("Please choose morning, afternoon or night.", inviteForm.querySelector('input[name="inv-time"]'));
+      if(!radio("inv-team")) return fail("Please say whether he should come with his team or alone.", inviteForm.querySelector('input[name="inv-team"]'));
+      if(!$("#inv-contact").value.trim()) return fail("Please add a phone number or email so Muyiwa Nafiu can reach you back.", $("#inv-contact"));
+      return true;
     }
 
     inviteForm.addEventListener("submit", function(e){
       e.preventDefault();
-      var name = inviteForm.querySelector("#inv-name").value.trim() || "A warm friend";
-      var org = inviteForm.querySelector("#inv-org").value.trim();
-      var city = inviteForm.querySelector("#inv-city").value.trim();
-      var date = inviteForm.querySelector("#inv-date").value;
-      var purpose = inviteForm.querySelector("#inv-purpose").value;
-      var notes = inviteForm.querySelector("#inv-notes").value.trim();
-      var contact = inviteForm.querySelector("#inv-contact").value.trim();
+      if(!validate()) return;
 
-      var purposeLine = {
-        ministration: "to minister in song at an upcoming service or program",
-        conference: "to lead worship at a conference or retreat",
-        concert: "to minister at a gospel concert",
-        crusade: "to minister in song at a crusade",
-        training: "to host a worship/song-leading training session",
-        book: "regarding the book \"Serving As A Psalmist\" (bulk copies or a reading/signing)",
-        other: "regarding an opportunity to work together"
-      }[purpose] || "regarding an opportunity to work together";
+      var name = $("#inv-name").value.trim();
+      var org = $("#inv-org").value.trim();
+      var purposeSel = $("#inv-purpose");
+      var purpose = purposeSel.value;
+      var purposeText = purposeSel.options[purposeSel.selectedIndex].text;
+      var mode = radio("inv-mode");
+      var notes = $("#inv-notes").value.trim();
+      var contact = $("#inv-contact").value.trim();
+      var timeOfDay = radio("inv-time");
+      var start = clock($("#inv-clock").value);
+      var team = radio("inv-team") === "team" ? "With your team (band and backup vocalists)" : "Alone (solo ministration)";
+
+      var ask = {
+        ministration: "to minister in song at our church service",
+        conference: "to minister at our conference / retreat",
+        concert: "to minister at our gospel concert",
+        crusade: "to minister in song at our crusade",
+        training: "to train our worship leaders and music team",
+        book: "regarding the book Serving As A Psalmist",
+        other: "to minister with us"
+      }[purpose] || "to minister with us";
+
+      var when = longDate(dateIn.value);
+      if(multi.checked && endIn.value && endIn.value !== dateIn.value){
+        var days = Math.round((new Date(endIn.value) - new Date(dateIn.value)) / 86400000) + 1;
+        when = longDate(dateIn.value) + " to " + longDate(endIn.value) + " (" + days + " days)";
+      }
 
       var lines = [];
-      lines.push("Dear Muyiwa,");
+      lines.push("Dear Minister Muyiwa Nafiu,");
       lines.push("");
-      lines.push("My name is " + name + (org ? (", from " + org) : "") + ". I'm reaching out " + purposeLine + (city ? (" in " + city) : "") + (date ? (", tentatively around " + niceDate(date)) : "") + ".");
+      lines.push("My name is " + name + (org ? (", from " + org) : "") + ". We would love to invite you " + ask + ".");
+      lines.push("");
+      lines.push("*Invitation:* " + purposeText);
+      lines.push("*Format:* " + (mode === "virtual" ? "Virtual (online)" : "Physical (in person)"));
+      lines.push((mode === "virtual" ? "*Platform:* " : "*Venue:* ") + venue.value.trim().replace(/\s*\n\s*/g, ", "));
+      lines.push("*Date:* " + when);
+      lines.push("*Time:* " + timeOfDay + (start ? (", starting " + start) : ""));
+      lines.push("*Ministering:* " + team);
       if(notes){ lines.push(""); lines.push(notes); }
       lines.push("");
-      lines.push("Please let me know your availability and what you'd need from us to make this happen.");
-      lines.push("");
-      lines.push(contact ? ("You can reach me at: " + contact) : "Looking forward to hearing from you.");
+      lines.push("You can reach me on " + contact + ".");
       lines.push("");
       lines.push("Grace and peace.");
 
       var message = lines.join("\n");
-      var waUrl = "https://wa.me/2348136785140?text=" + encodeURIComponent(message);
-      out.textContent = message;
+      var waUrl = "https://wa.me/" + WA_NUMBER + "?text=" + encodeURIComponent(message);
+      out.textContent = message.replace(/\*/g, "");
       out.classList.add("show");
       copyBtn.hidden = false;
       copyNote.classList.remove("show");
       var again = document.querySelector("#wa-again");
       if(again){ again.href = waUrl; again.hidden = false; }
-      // go straight to Muyiwa's WhatsApp with the message filled in
+      // go straight to Muyiwa Nafiu's WhatsApp with the invitation filled in
       var win = window.open(waUrl, "_blank");
       if(!win){ window.location.href = waUrl; }
     });
