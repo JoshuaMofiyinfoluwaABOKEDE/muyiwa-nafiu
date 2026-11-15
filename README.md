@@ -14,5 +14,6 @@ Every push to `main` redeploys automatically. `vercel.json` turns on clean URLs 
 
 - `index.html`: home page
 - `resources.html`: the 50 teachings (each article can be linked as `/resources#article-slug`)
-- `teenagers-worship-experience.html`: event photos
+- `teenagers-worship-experience.html`: session videos and event photos
+- `404.html`: page shown for broken links
 - `styles.css`, `script.js`, `assets/`

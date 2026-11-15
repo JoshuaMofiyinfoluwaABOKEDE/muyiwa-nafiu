@@ -206,6 +206,8 @@
       var purposeLine = {
         ministration: "to minister in song at an upcoming service or program",
         conference: "to lead worship at a conference or retreat",
+        concert: "to minister at a gospel concert",
+        crusade: "to minister in song at a crusade",
         training: "to host a worship/song-leading training session",
         book: "regarding the book \"Serving As A Psalmist\" (bulk copies or a reading/signing)",
         other: "regarding an opportunity to work together"
@@ -224,11 +226,16 @@
       lines.push("Grace and peace.");
 
       var message = lines.join("\n");
+      var waUrl = "https://wa.me/2348136785140?text=" + encodeURIComponent(message);
       out.textContent = message;
       out.classList.add("show");
       copyBtn.hidden = false;
       copyNote.classList.remove("show");
-      out.scrollIntoView({ behavior:"smooth", block:"nearest" });
+      var again = document.querySelector("#wa-again");
+      if(again){ again.href = waUrl; again.hidden = false; }
+      // go straight to Muyiwa's WhatsApp with the message filled in
+      var win = window.open(waUrl, "_blank");
+      if(!win){ window.location.href = waUrl; }
     });
 
     if(copyBtn){
@@ -252,6 +259,14 @@
       try{ document.execCommand("copy"); cb(); }catch(e){}
       document.body.removeChild(ta);
     }
+
+    // "Order for your team" on the book card pre-selects the book option
+    document.querySelectorAll("[data-purpose]").forEach(function(a){
+      a.addEventListener("click", function(){
+        var sel = inviteForm.querySelector("#inv-purpose");
+        if(sel) sel.value = a.getAttribute("data-purpose");
+      });
+    });
 
     // allow ?purpose=book deep-links
     var params = new URLSearchParams(window.location.search);
