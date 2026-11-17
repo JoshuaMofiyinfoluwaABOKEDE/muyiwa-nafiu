@@ -60,14 +60,14 @@
   (function(){
     var page = (location.pathname.split("/").pop() || "index.html").replace(/\.html$/, "");
     function mark(sel){ document.querySelectorAll(sel).forEach(function(a){ a.classList.add("active"); a.setAttribute("aria-current", "page"); }); }
-    if(page === "resources"){ mark('.primary-nav a[href="resources.html"], .mobile-nav a[href="resources.html"]'); return; }
+    if(page === "resources"){ mark('.primary-nav a[href="/resources"], .mobile-nav a[href="/resources"]'); return; }
     if(page === "teenagers-worship-experience"){
       document.querySelectorAll(".nav-dropdown").forEach(function(d){ d.classList.add("is-current"); });
-      mark('.nav-dropdown-menu a[href="teenagers-worship-experience.html"], .mobile-nav a[href="teenagers-worship-experience.html"]');
+      mark('.nav-dropdown-menu a[href="/teenagers-worship-experience"], .mobile-nav a[href="/teenagers-worship-experience"]');
       return;
     }
     if(!("IntersectionObserver" in window)) return;
-    var map = { music:"#music", watch:"#music", moments:"#music", book:"#book", programs:"#programs", resources:"resources.html", about:"#about", invite:"#invite" };
+    var map = { music:"#music", watch:"#music", moments:"#music", book:"#book", programs:"#programs", resources:"/resources", about:"#about", invite:"#invite" };
     var links = document.querySelectorAll(".primary-nav > a, .mobile-nav > a:not(.mobile-book)");
     var progBtn = document.querySelector(".nav-dropdown-btn");
     var visible = {};
@@ -519,7 +519,7 @@
       frame.src = "https://www.youtube-nocookie.com/embed/" + encodeURIComponent(tile.getAttribute("data-vid")) + "?autoplay=1&rel=0";
       frame.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
       frame.allowFullscreen = true;
-      frame.title = "YouTube video";
+      frame.title = tile.getAttribute("data-title") || "YouTube video";
       tile.innerHTML = "";
       tile.appendChild(frame);
       tile.style.cursor = "default";
